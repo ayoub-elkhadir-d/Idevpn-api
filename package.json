@@ -1,0 +1,21 @@
+{
+  "name": "ultimate-tunnel-admin",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/server",
+    "packages/web"
+  ],
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev --workspace @uta/server",
+    "dev:web": "npm run dev --workspace @uta/web",
+    "build": "npm run build --workspace @uta/server && npm run build --workspace @uta/web",
+    "start": "npm run start --workspace @uta/server",
+    "db:migrate": "npm run db:migrate --workspace @uta/server",
+    "admin:create": "npm run admin:create --workspace @uta/server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

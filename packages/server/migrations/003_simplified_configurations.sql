@@ -1,0 +1,6 @@
+ALTER TABLE configurations
+  ADD COLUMN logo_url VARCHAR(2048) NULL,
+  MODIFY COLUMN country_code CHAR(2) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  MODIFY COLUMN country_name TEXT NULL,
+  MODIFY COLUMN carrier_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL,
+  MODIFY COLUMN server_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL;
