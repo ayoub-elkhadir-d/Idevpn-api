@@ -14,6 +14,26 @@ const app = express();
 if (env.TRUST_PROXY) app.set("trust proxy", 1);
 app.disable("x-powered-by");
 app.use(helmet());
+app.use((request, response, next) => {
+  const origin = request.get("Origin");
+  if (origin && origin !== env.FRONTEND_ORIGIN) {
+    response.status(403).json({ error: "Origin is not allowed." });
+    return;
+  }
+  if (origin) {
+    response.vary("Origin");
+    response.setHeader("Access-Control-Allow-Origin", env.FRONTEND_ORIGIN);
+    response.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+  if (request.method === "OPTIONS" && origin) {
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    response.setHeader("Access-Control-Max-Age", "600");
+    response.status(204).end();
+    return;
+  }
+  next();
+});
 app.use(express.json({ limit: "16kb" }));
 app.use(cookieParser());
 

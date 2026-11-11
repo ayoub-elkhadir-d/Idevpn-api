@@ -17,6 +17,8 @@ export type ConfigurationInput = {
 };
 export type Pagination = { page: number; pageSize: number; total: number; totalPages: number };
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") ?? "";
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -36,7 +38,7 @@ export function getErrorMessage(error: unknown, fallback: string): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     ...init,
     credentials: "include",
     headers: {

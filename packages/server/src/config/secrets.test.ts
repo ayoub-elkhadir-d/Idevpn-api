@@ -5,6 +5,7 @@ process.env.DB_HOST ??= "127.0.0.1";
 process.env.DB_USER ??= "uta_test";
 process.env.DB_PASSWORD ??= "test-password";
 process.env.DB_NAME ??= "uta_test";
+process.env.FRONTEND_ORIGIN ??= "http://localhost:5173";
 process.env.CONFIG_ENCRYPTION_KEY ??= Buffer.alloc(32, 2).toString("base64");
 
 const { decryptConfiguration, encryptConfiguration } = await import("./secrets.js");

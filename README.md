@@ -63,6 +63,8 @@ The migration command creates the tables in order on the selected MySQL database
 
 Build both workspaces with `npm run build`, then run `npm start` to start the API. Set `NODE_ENV=production` and `SESSION_COOKIE_SECURE=true` when serving behind HTTPS. Configure your reverse proxy to route `/api` to the API and serve the built frontend from `packages/web/dist`. Set `TRUST_PROXY=true` only when the API is behind a trusted reverse proxy.
 
+For cPanel deployment, set `VITE_API_BASE_URL` to the HTTPS API origin before building and configure `FRONTEND_ORIGIN` to the exact HTTPS frontend origin in the API environment. See [DEPLOYMENT.md](./DEPLOYMENT.md) for Namecheap cPanel startup, CORS, cookie, database, and environment settings.
+
 ## Project structure
 
 ```text

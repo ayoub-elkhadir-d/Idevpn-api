@@ -22,7 +22,7 @@ export async function createSession(adminUserId: string, response: Response): Pr
   );
   response.cookie(sessionCookieName, token, {
     httpOnly: true,
-    secure: env.SESSION_COOKIE_SECURE || env.NODE_ENV === "production",
+    secure: env.SESSION_COOKIE_SECURE,
     sameSite: "strict",
     path: "/",
     expires: expiresAt
@@ -47,7 +47,7 @@ export async function destroySession(token: string | undefined, response: Respon
   }
   response.clearCookie(sessionCookieName, {
     httpOnly: true,
-    secure: env.SESSION_COOKIE_SECURE || env.NODE_ENV === "production",
+    secure: env.SESSION_COOKIE_SECURE,
     sameSite: "strict",
     path: "/"
   });
