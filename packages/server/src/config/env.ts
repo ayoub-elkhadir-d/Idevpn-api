@@ -1,8 +1,9 @@
 import { config } from "dotenv";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 import { z } from "zod";
 
-config({ path: fileURLToPath(new URL("../../../../.env", import.meta.url)) });
+config({ path: resolve(process.cwd(), ".env") });
+config({ path: resolve(process.cwd(), "../../.env") });
 
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

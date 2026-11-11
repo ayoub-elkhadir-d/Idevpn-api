@@ -4,5 +4,9 @@ coverage/
 .env
 .env.*
 !.env.example
+deploy/cpanel/server/src/
+deploy/cpanel/server/dist/
+deploy/cpanel/server/migrations/
+deploy/cpanel/public/
 npm-debug.log*
 .DS_Store

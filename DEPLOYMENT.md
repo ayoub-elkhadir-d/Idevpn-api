@@ -1,77 +1,137 @@
-# Namecheap cPanel deployment
+# Namecheap cPanel / CloudLinux deployment
+
+The local project remains an npm-workspaces monorepo. **Do not install from the repository root in CloudLinux Node.js Selector.** Its npm wrapper redirects the install prefix into the application virtual environment and cannot reliably install the monorepo workspaces.
+
+`deploy/cpanel` is a separate, standalone Node.js application root. Its package manifest and lockfile list the backend runtime dependencies and TypeScript build dependencies directly, with no `workspaces` field. The backend source and migrations are staged into this directory by the local `npm run build:cpanel` command. The frontend is deployed as static files on its own domain.
 
 ## Requirements
 
-- Namecheap hosting with **Setup Node.js App** enabled and a Node.js 20+ runtime.
+- Namecheap shared hosting with CloudLinux **Setup Node.js App / Node.js Selector**, Node.js 22.
 - MySQL 8.0.16+ database and user created in cPanel.
-- A frontend origin and API subdomain under the same registrable domain, both served over HTTPS. For example, `https://admin.example.com` and `https://api.example.com`.
+- An API subdomain and frontend origin under the same registrable domain, both served over HTTPS. Example: `api.example.com` and `admin.example.com`.
 
-The shared-hosting plan must support a persistent Node.js application, outbound/local MySQL connections, and the dependencies in this repository. Confirm those capabilities with the host if they are not available in cPanel.
+Confirm the hosting plan supports persistent Node applications and MySQL connections before switching production traffic.
 
-## Build and upload
+## Build the upload bundle locally
 
-1. In cPanel, create the MySQL database and user, grant the user access to the database, and note the exact cPanel-prefixed database and username plus the database host.
-2. Set `VITE_API_BASE_URL` to the HTTPS API origin (for example `https://api.example.com`) in the build environment. Production builds fail when it is missing or invalid. This is a public frontend setting, not a secret. Do not add a trailing path such as `/api`.
-3. From the repository root, install all workspace dependencies and build both applications:
+Run these commands from the repository root on a development machine with Node.js 22 and npm:
 
-   ```sh
-   npm ci
-   npm run build
-   ```
+```sh
+npm ci
+```
 
-4. Upload the repository, including the root `node_modules`, `app.cjs`, and both generated directories (`packages/server/dist` and `packages/web/dist`). Do not upload `.env` to source control or expose it in the frontend build.
-5. In cPanel **Setup Node.js App**, choose Node.js 20 or newer, set the application root to the repository root, and set the startup file to `app.cjs`. Use production mode.
-6. Configure the environment variables below in cPanel, save, and restart the application.
-7. Configure the frontend web root to serve `packages/web/dist` at the frontend domain. Configure the API subdomain to route requests to the Node.js application using cPanel's application URL / reverse-proxy integration. Keep API paths (including `/api`) unchanged.
-8. Apply schema migrations once from the repository root against the production MySQL database, using the same environment variables:
+In PowerShell, set the API URL before building:
 
-   ```sh
-   npm run db:migrate
-   ```
+```powershell
+$env:VITE_API_BASE_URL = "https://api.example.com"
+npm run build:cpanel
+```
 
-9. Create the initial admin account in an interactive shell with the production environment:
+In Bash:
 
-   ```sh
-   npm run admin:create
-   ```
+```sh
+VITE_API_BASE_URL=https://api.example.com npm run build:cpanel
+```
 
-   Do not run first-admin creation as a public web route.
+The command runs the existing workspace production build and stages:
 
-## cPanel environment variables
+- Backend source and `tsconfig.json` under `deploy/cpanel/server/`
+- MySQL migrations under `deploy/cpanel/server/migrations/`
+- Frontend assets plus Apache SPA fallback `.htaccess` under `deploy/cpanel/public/`
+
+The generated stage directories are intentionally gitignored. They must be transferred along with the tracked cPanel files. Do not upload `.env`, `node_modules`, or credentials.
+
+## What to pull and upload
+
+1. Pull the GitHub repository to `~/Idevpn-api` (or your chosen repository directory). Git provides the tracked app manifest and lockfile in `deploy/cpanel/`, the cPanel startup file, scripts, and application source.
+2. Build the upload bundle locally using the commands above.
+3. Use SFTP/File Manager to upload these generated paths from the local checkout into the matching repository paths on Namecheap:
+   - `deploy/cpanel/server/src/`
+   - `deploy/cpanel/server/tsconfig.json`
+   - `deploy/cpanel/server/migrations/`
+   - All contents of `deploy/cpanel/public/`, including `.htaccess`
+4. Ensure the tracked files are also present on Namecheap:
+   - `deploy/cpanel/package.json`
+   - `deploy/cpanel/package-lock.json`
+   - `deploy/cpanel/app.cjs`
+   - `deploy/cpanel/.env.example`
+
+Upload the generated bundle after each code update. Do not overwrite the live `deploy/cpanel/.env` or CloudLinux-managed `node_modules` symlink when uploading.
+
+## Create the cPanel app
+
+1. In cPanel, create a MySQL database and user, grant the user access, and note the exact cPanel-prefixed names and database host.
+2. Create the Node.js app in **Setup Node.js App**:
+   - Node.js version: `22`
+   - Application root: `Idevpn-api/deploy/cpanel` (relative to your cPanel home directory)
+   - Application URL: your API subdomain
+   - Application startup file: `app.cjs`
+   - Application mode: `Production`
+3. Add the environment variables from the next section in the application configuration. Leave `PORT` to CloudLinux.
+4. Run the Terminal commands below from the standalone application root.
+5. In cPanel, click **Restart** after installing/building and whenever the app environment or compiled backend changes.
+
+## Exact Terminal commands
+
+After uploading the tracked files and generated bundle, run:
+
+```sh
+cd ~/Idevpn-api/deploy/cpanel
+source ~/nodevenv/Idevpn-api/22/bin/activate
+cp .env.example .env
+nano .env
+chmod 600 .env
+npm install --include=dev --workspaces=false
+npm run build
+npm run db:migrate
+npm run admin:create
+```
+
+Edit `.env` with the real production values before continuing. Use the exact MySQL host and cPanel-prefixed database/user from cPanel. Generate `CONFIG_ENCRYPTION_KEY` with:
+
+```sh
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+Keep a secure backup of that key; without it encrypted configuration credentials cannot be recovered. The `.env` file is ignored by Git and must never be uploaded to a public document root.
+
+The install and build commands run **inside `deploy/cpanel`** against its standalone `package.json` and `package-lock.json`; they do not invoke npm workspaces. `npm install` is used rather than `npm ci` because CloudLinux manages `node_modules` through the Node.js Selector virtual environment. `--include=dev` installs TypeScript, needed by the standalone `npm run build` script.
+
+Run migrations once for a fresh database and create the initial admin once. On later deployments, upload the new staged bundle, then run `npm install --include=dev --workspaces=false`, `npm run build`, and restart the app. Do not repeatedly create the initial admin.
+
+## Environment variables
+
+Set these in the cPanel app configuration. A private `deploy/cpanel/.env` is also read by the CLI commands when run from that directory; process environment values supplied by cPanel take precedence.
 
 | Variable | Production value |
 | --- | --- |
 | `NODE_ENV` | `production` |
-| `PORT` | Leave to the hosting platform; the app listens on this value. |
+| `PORT` | Do not set manually; CloudLinux supplies it. The Express listener validates and uses it. |
 | `DB_HOST` | MySQL host shown in cPanel. |
 | `DB_PORT` | MySQL port, usually `3306`. |
 | `DB_USER` | Exact cPanel database username. |
-| `DB_PASSWORD` | Database password, set only in cPanel. |
+| `DB_PASSWORD` | Database password. |
 | `DB_NAME` | Exact cPanel database name. |
-| `FRONTEND_ORIGIN` | Exact HTTPS origin only, e.g. `https://admin.example.com`; no path or trailing slash. |
+| `FRONTEND_ORIGIN` | Exact HTTPS frontend origin, e.g. `https://admin.example.com`, with no path or trailing slash. |
 | `SESSION_COOKIE_SECURE` | `true` (required in production). |
-| `TRUST_PROXY` | `true` only if cPanel's trusted proxy is required for client IP / protocol handling; otherwise `false`. |
-| `CONFIG_ENCRYPTION_KEY` | A private base64-encoded 32-byte key. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` and keep a secure backup. |
-| `VITE_API_BASE_URL` | `https://api.example.com`, supplied at build time; it is compiled into frontend assets and is not a secret. |
+| `TRUST_PROXY` | Set `true` only if the trusted cPanel proxy setup requires Express proxy handling; otherwise `false`. |
+| `CONFIG_ENCRYPTION_KEY` | Private base64-encoded 32-byte key. |
+| `VITE_API_BASE_URL` | Build-time only, e.g. `https://api.example.com`. It is compiled into public frontend files and is not a secret. |
 
-Never commit `.env`, database credentials, encryption keys, or other deployment secrets. The repository ignores `.env` files; use cPanel's environment settings for runtime secrets.
+Never commit `.env`, database credentials, encryption keys, or other deployment secrets. The root and cPanel `.env` files are ignored by Git.
 
-## HTTPS, CORS, and session cookies
+## Frontend deployment
 
-The API allows browser origins only when they exactly match `FRONTEND_ORIGIN`; credentialed requests are enabled for that origin only. The frontend API client uses `credentials: "include"` so login can set the admin session cookie and later calls can send it. CORS does not authenticate requests; protected API routes continue to enforce the existing server-side session.
+The cPanel Node app is API-only; it does not serve the React frontend. Upload the **contents** of `deploy/cpanel/public/` into the frontend domain's document root (for example `public_html`). The staged `.htaccess` provides an SPA fallback for React Router on Apache. Keep the frontend and API on HTTPS subdomains of the same registrable domain, such as `admin.example.com` and `api.example.com`.
 
-The session cookie remains `HttpOnly` and `SameSite=Strict`, and production validation requires `SESSION_COOKIE_SECURE=true` and an HTTPS `FRONTEND_ORIGIN`. Separate frontend/API subdomains such as `admin.example.com` and `api.example.com` are cross-origin but same-site when both use HTTPS under the same registrable domain. This permits the strict cookie policy while CORS controls which browser origin may read credentialed responses.
+The frontend API client uses the build-time `VITE_API_BASE_URL`; rebuild and re-upload the static assets if it changes. Vite's `/api` development proxy is unchanged and remains for local development.
 
-Do not use unrelated registrable domains for frontend and API with this cookie configuration: `SameSite=Strict` will not send the session cookie in that cross-site setup. Use same-site subdomains and HTTPS for both. Make sure Namecheap's proxy preserves the request host and forwards HTTPS correctly.
+## CORS, cookies, and startup
 
-## Startup and verification
+Express allows credentialed browser requests only from the exact configured `FRONTEND_ORIGIN`. The API does not use a wildcard origin. Admin session cookies remain `HttpOnly`, `Secure`, and `SameSite=Strict` in production.
 
-- cPanel starts the root `app.cjs`, which dynamically imports `packages/server/dist/index.js`.
-- The package `npm start` command starts the same compiled API.
-- The Express listener uses the validated `PORT` environment variable supplied by cPanel.
-- Check `https://api.example.com/api/health` after restart; it should report both API and database connectivity.
-- Confirm login, `/api/auth/me`, and logout from the deployed frontend in a browser. Check the browser network panel for the exact CORS origin, credentialed requests, and a `Secure; HttpOnly; SameSite=Strict` session cookie.
-- Rebuild the frontend whenever `VITE_API_BASE_URL` changes. It is not read from cPanel at browser runtime.
-- Run `npm run build` before upload and verify both `packages/server/dist` and `packages/web/dist` exist. `npm start` requires the compiled server output; build first.
+The frontend and API are cross-origin but same-site when served over HTTPS on sibling subdomains of the same registrable domain. `SameSite=Strict` works for that deployment; unrelated frontend/API domains are cross-site and will not send this cookie.
 
-This deployment guide does not transfer existing PostgreSQL data. If moving existing data, create and validate a separate backup/export/import plan before switching production traffic.
+CloudLinux starts `deploy/cpanel/app.cjs`, which dynamically imports the compiled `server/dist/index.js`. The standalone `npm start` script uses the same entry point. The package includes direct runtime dependencies (`express`, `mysql2`, auth/security libraries) and direct build dependencies (`typescript` and type packages); it needs no root workspace install or root `node_modules`.
+
+After restarting, check `https://api.example.com/api/health` for API and MySQL connectivity. Then verify login, `/api/auth/me`, logout, and the session cookie from the HTTPS frontend in a browser.

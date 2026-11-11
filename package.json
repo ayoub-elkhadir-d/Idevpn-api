@@ -11,6 +11,8 @@
     "dev:server": "npm run dev --workspace @uta/server",
     "dev:web": "npm run dev --workspace @uta/web",
     "build": "npm run build --workspace @uta/server && npm run build --workspace @uta/web",
+    "stage:cpanel": "node scripts/prepare-cpanel.mjs",
+    "build:cpanel": "npm run build && npm run stage:cpanel",
     "start": "npm run start --workspace @uta/server",
     "db:migrate": "npm run db:migrate --workspace @uta/server",
     "admin:create": "npm run admin:create --workspace @uta/server"
